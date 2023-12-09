@@ -5,18 +5,21 @@ using UnityEngine;
 [RequireComponent(typeof(MeshRenderer))]
 public class MovingGround : MonoBehaviour
 {
-    public Vector2 offset = Vector2.zero;
-
     MeshRenderer m_Renderer;
+    Vector2 _offset;
 
     void Awake()
     {
         m_Renderer = GetComponent<MeshRenderer>();
     }
 
-    // Update is called once per frame
-    void Update()
+    public void Init(Vector2 offset)
     {
-        m_Renderer.material.mainTextureOffset = Time.time * offset;
+        _offset = offset;
+    }
+
+    public void Move(float time)
+    {
+        m_Renderer.material.mainTextureOffset = time * _offset;
     }
 }

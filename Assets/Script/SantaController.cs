@@ -16,6 +16,9 @@ using StarterAssets;
 #endif
 public class SantaController : MonoBehaviour
 {
+    [Header("Managers")]
+    public ScrollManager scrollManager;
+
     [Header("Player")]
     [Tooltip("Move speed of the character in m/s")]
     public float MoveSpeed = 2.0f;
@@ -27,8 +30,8 @@ public class SantaController : MonoBehaviour
     [Range(0.0f, 0.3f)]
     public float RotationSmoothTime = 0.12f;
 
-    [Tooltip("Strafe")]
-    public float StrafeChangeRate = 8000.0f;
+    [Tooltip("Aside")]
+    public float AsideStepSpeed = 4000.0f;
 
     public AudioClip LandingAudioClip;
     public AudioClip[] FootstepAudioClips;
@@ -156,6 +159,8 @@ public class SantaController : MonoBehaviour
         // reset our timeouts on start
         _jumpTimeoutDelta = JumpTimeout;
         _fallTimeoutDelta = FallTimeout;
+
+        scrollManager.Play();
     }
 
     private void Update()
@@ -257,7 +262,8 @@ public class SantaController : MonoBehaviour
         {
             _moveAside = false;
         }
-        else x = Mathf.Sign(deltaX) * Time.deltaTime * StrafeChangeRate;
+        else x = Mathf.Sign(deltaX) * Time.deltaTime * AsideStepSpeed;
+        // TODO Sometimes get out of the map
 
         // move the player
         _controller.Move(new Vector3(x, _verticalVelocity, 0.0f) * Time.deltaTime);
