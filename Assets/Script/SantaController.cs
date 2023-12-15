@@ -275,8 +275,6 @@ public class SantaController : MonoBehaviour
                 _controller.enabled = false;
                 _controller.transform.position = new Vector3(targetX, Mathf.Max(0f, _controller.transform.position.y));
                 _controller.enabled = true;
-
-                _mainCamera.
             }
             else x = Mathf.Sign(deltaX) * Time.deltaTime * AsideStepSpeed;
 
