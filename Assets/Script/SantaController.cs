@@ -1,5 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using static UnityEditor.PlayerSettings;
+using Unity.VisualScripting;
 
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -17,7 +19,7 @@ using StarterAssets;
 public class SantaController : MonoBehaviour
 {
     [Header("Managers")]
-    public ScrollManager scrollManager;
+    public ScrollManager ScrollManager;
 
     [Header("Player")]
     [Tooltip("Move speed of the character in m/s")]
@@ -96,6 +98,9 @@ public class SantaController : MonoBehaviour
     private bool _moveAside;
     private bool _asideRight;
 
+    private readonly float MAX_DELTA_X = 5f;
+    private float _prevDeltaX;
+
     // timeout deltatime
     private float _jumpTimeoutDelta;
     private float _fallTimeoutDelta;
@@ -160,7 +165,7 @@ public class SantaController : MonoBehaviour
         _jumpTimeoutDelta = JumpTimeout;
         _fallTimeoutDelta = FallTimeout;
 
-        scrollManager.Play();
+        ScrollManager.Play();
     }
 
     private void Update()
@@ -234,6 +239,7 @@ public class SantaController : MonoBehaviour
                     _horizontal_pos = NextPos(_horizontal_pos);
                     _moveAside = true;
                     _asideRight = true;
+                    _prevDeltaX = MAX_DELTA_X;
                 }
                 else
                 {
@@ -247,6 +253,7 @@ public class SantaController : MonoBehaviour
                     _horizontal_pos = PrevPos(_horizontal_pos);
                     _moveAside = true;
                     _asideRight = false;
+                    _prevDeltaX = MAX_DELTA_X;
                 }
                 else
                 {
@@ -255,15 +262,26 @@ public class SantaController : MonoBehaviour
             }
         }
 
-        float targetX = Position_X[_horizontal_pos];
-        float deltaX = targetX - transform.position.x;
-        float x = 0f; ;
-        if (Mathf.Abs(deltaX) < 0.01f)
+        float x = 0f;
+        if (_moveAside)
         {
-            _moveAside = false;
+            float targetX = Position_X[_horizontal_pos];
+            float deltaX = targetX - transform.position.x;
+            float absDeltaX = Mathf.Abs(deltaX);
+            if (absDeltaX > _prevDeltaX)
+            {
+                _moveAside = false;
+
+                _controller.enabled = false;
+                _controller.transform.position = new Vector3(targetX, Mathf.Max(0f, _controller.transform.position.y));
+                _controller.enabled = true;
+
+                _mainCamera.
+            }
+            else x = Mathf.Sign(deltaX) * Time.deltaTime * AsideStepSpeed;
+
+            _prevDeltaX = absDeltaX;
         }
-        else x = Mathf.Sign(deltaX) * Time.deltaTime * AsideStepSpeed;
-        // TODO Sometimes get out of the map
 
         // move the player
         _controller.Move(new Vector3(x, _verticalVelocity, 0.0f) * Time.deltaTime);
@@ -298,7 +316,7 @@ public class SantaController : MonoBehaviour
             }
 
             // Jump
-            if (_input.jump && _jumpTimeoutDelta <= 0.0f)
+            if ((_input.jump || _input.move.y > 0) && _jumpTimeoutDelta <= 0.0f)
             {
                 // the square root of H * -2 * G = how much velocity needed to reach desired height
                 _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
