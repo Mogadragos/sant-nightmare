@@ -32,9 +32,6 @@ public class SantaController : MonoBehaviour
     [Range(0.0f, 0.3f)]
     public float RotationSmoothTime = 0.12f;
 
-    [Tooltip("Aside")]
-    public float AsideStepSpeed = 4000.0f;
-
     public AudioClip LandingAudioClip;
     public AudioClip[] FootstepAudioClips;
     [Range(0, 1)] public float FootstepAudioVolume = 0.3f;
@@ -52,6 +49,9 @@ public class SantaController : MonoBehaviour
 
     [Tooltip("Time required to pass before entering the fall state. Useful for walking down stairs")]
     public float FallTimeout = 0.15f;
+
+    [Tooltip("Time required to pass before being able to teleport again. Set to 0f to instantly jump again")]
+    public float TeleportTimeout = 0.1f;
 
     [Header("Player Grounded")]
     [Tooltip("If the character is grounded or not. Not part of the CharacterController built in grounded check")]
@@ -87,30 +87,25 @@ public class SantaController : MonoBehaviour
     private float _cinemachineTargetPitch;
 
     // player
-    private readonly Dictionary<POSITION, float> Position_X = new Dictionary<POSITION, float>() {
-        [POSITION.LEFT] = -1.5f,
+    private readonly Dictionary<POSITION, float> _position_dict = new Dictionary<POSITION, float>()
+    {
+        [POSITION.LEFT] = -2.5f,
         [POSITION.CENTER] = 0f,
-        [POSITION.RIGHT] = 1.5f
+        [POSITION.RIGHT] = 2.5f,
     };
     private POSITION _horizontal_pos = POSITION.CENTER;
     private float _verticalVelocity;
     private readonly float _terminalVelocity = 53.0f;
-    private bool _moveAside;
-    private bool _asideRight;
-
-    private readonly float MAX_DELTA_X = 5f;
-    private float _prevDeltaX;
 
     // timeout deltatime
     private float _jumpTimeoutDelta;
     private float _fallTimeoutDelta;
+    private float _teleportTimeoutDelta;
 
     // animation IDs
     private int _animIDGrounded;
     private int _animIDJump;
     private int _animIDFreeFall;
-    private int _animIDMoveAside;
-    private int _animIDAsideRight;
 
 #if ENABLE_INPUT_SYSTEM 
     private PlayerInput _playerInput;
@@ -164,6 +159,7 @@ public class SantaController : MonoBehaviour
         // reset our timeouts on start
         _jumpTimeoutDelta = JumpTimeout;
         _fallTimeoutDelta = FallTimeout;
+        _teleportTimeoutDelta = TeleportTimeout;
 
         ScrollManager.Play();
     }
@@ -187,8 +183,6 @@ public class SantaController : MonoBehaviour
         _animIDGrounded = Animator.StringToHash("Grounded");
         _animIDJump = Animator.StringToHash("Jump");
         _animIDFreeFall = Animator.StringToHash("FreeFall");
-        _animIDMoveAside = Animator.StringToHash("MoveAside");
-        _animIDAsideRight = Animator.StringToHash("AsideRight");
     }
 
     private void GroundedCheck()
@@ -230,67 +224,53 @@ public class SantaController : MonoBehaviour
     private void Move()
     {
         // Move aside
-        if(!_moveAside)
+        if(_teleportTimeoutDelta < 0.0f)
         {
-            if (_input.move.x > 0)
-            {
-                if (_horizontal_pos != POSITION.RIGHT)
-                {
-                    _horizontal_pos = NextPos(_horizontal_pos);
-                    _moveAside = true;
-                    _asideRight = true;
-                    _prevDeltaX = MAX_DELTA_X;
-                }
-                else
-                {
-                    // Anim bump wall
-                }
-            }
-            else if (_input.move.x < 0)
+            if (_input.move.x < 0)
             {
                 if (_horizontal_pos != POSITION.LEFT)
                 {
-                    _horizontal_pos = PrevPos(_horizontal_pos);
-                    _moveAside = true;
-                    _asideRight = false;
-                    _prevDeltaX = MAX_DELTA_X;
+                    Teleport(false);
                 }
                 else
                 {
                     // Anim bump wall
                 }
             }
-        }
-
-        float x = 0f;
-        if (_moveAside)
-        {
-            float targetX = Position_X[_horizontal_pos];
-            float deltaX = targetX - transform.position.x;
-            float absDeltaX = Mathf.Abs(deltaX);
-            if (absDeltaX > _prevDeltaX)
+            else if (_input.move.x > 0)
             {
-                _moveAside = false;
-
-                _controller.enabled = false;
-                _controller.transform.position = new Vector3(targetX, Mathf.Max(0f, _controller.transform.position.y));
-                _controller.enabled = true;
+                if (_horizontal_pos != POSITION.RIGHT)
+                {
+                    Teleport(true);
+                }
+                else
+                {
+                    // Anim bump wall
+                }
             }
-            else x = Mathf.Sign(deltaX) * Time.deltaTime * AsideStepSpeed;
-
-            _prevDeltaX = absDeltaX;
+        } else
+        {
+            _teleportTimeoutDelta -= Time.deltaTime;
         }
 
         // move the player
-        _controller.Move(new Vector3(x, _verticalVelocity, 0.0f) * Time.deltaTime);
+        _controller.Move(new Vector3(0f, _verticalVelocity, 0.0f) * Time.deltaTime);
+    }
 
-        // update animator if using character
-        if (_hasAnimator)
+    private void Teleport(bool toRight)
+    {
+        _teleportTimeoutDelta = TeleportTimeout;
+
+        _controller.enabled = false;
+        if(toRight)
         {
-            // Strafe
-            _animator.SetBool(_animIDMoveAside, _moveAside);
-            _animator.SetBool(_animIDAsideRight, _asideRight);
+            _horizontal_pos = NextPos(_horizontal_pos);
+        } else
+        {
+            _horizontal_pos = PrevPos(_horizontal_pos);
         }
+        _controller.transform.position = new Vector3(_position_dict[_horizontal_pos], _controller.transform.position.y);
+        _controller.enabled = true;
     }
 
     private void JumpAndGravity()
@@ -316,14 +296,7 @@ public class SantaController : MonoBehaviour
             // Jump
             if ((_input.jump || _input.move.y > 0) && _jumpTimeoutDelta <= 0.0f)
             {
-                // the square root of H * -2 * G = how much velocity needed to reach desired height
-                _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-
-                // update animator if using character
-                if (_hasAnimator)
-                {
-                    _animator.SetBool(_animIDJump, true);
-                }
+                Jump();
             }
 
             // jump timeout
@@ -359,6 +332,18 @@ public class SantaController : MonoBehaviour
         if (_verticalVelocity < _terminalVelocity)
         {
             _verticalVelocity += Gravity * Time.deltaTime;
+        }
+    }
+
+    private void Jump()
+    {
+        // the square root of H * -2 * G = how much velocity needed to reach desired height
+        _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+
+        // update animator if using character
+        if (_hasAnimator)
+        {
+            _animator.SetBool(_animIDJump, true);
         }
     }
 
