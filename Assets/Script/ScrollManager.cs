@@ -10,6 +10,8 @@ public class ScrollManager : MonoBehaviour
     public float yMin;
     public MovingGround ground;
 
+    public GameObject[] Gifts;
+
     private Vector3 _offset;
 
     private bool _playing = false;
