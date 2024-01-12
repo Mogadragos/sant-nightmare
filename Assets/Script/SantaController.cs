@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using System.Collections.Generic;
 
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -23,19 +22,16 @@ public class SantaController : MonoBehaviour
     [Tooltip("Move speed of the character in m/s")]
     public float MoveSpeed = 2.0f;
 
-    [Tooltip("Sprint speed of the character in m/s")]
-    public float SprintSpeed = 5.335f;
-
     [Tooltip("How fast the character turns to face movement direction")]
     [Range(0.0f, 0.3f)]
     public float RotationSmoothTime = 0.12f;
 
-    [Tooltip("Aside")]
-    public float AsideStepSpeed = 4000.0f;
+    [Tooltip("Acceleration and deceleration")]
+    public float SpeedChangeRate = 10.0f;
 
     public AudioClip LandingAudioClip;
     public AudioClip[] FootstepAudioClips;
-    [Range(0, 1)] public float FootstepAudioVolume = 0.3f;
+    [Range(0, 1)] public float FootstepAudioVolume = 0.5f;
 
     [Space(10)]
     [Tooltip("The height the player can jump")]
@@ -46,7 +42,7 @@ public class SantaController : MonoBehaviour
 
     [Space(10)]
     [Tooltip("Time required to pass before being able to jump again. Set to 0f to instantly jump again")]
-    public float JumpTimeout = 0.30f;
+    public float JumpTimeout = 0.0f;
 
     [Tooltip("Time required to pass before entering the fall state. Useful for walking down stairs")]
     public float FallTimeout = 0.15f;
@@ -85,27 +81,22 @@ public class SantaController : MonoBehaviour
     private float _cinemachineTargetPitch;
 
     // player
-    private readonly Dictionary<POSITION, float> Position_X = new Dictionary<POSITION, float>() {
-        [POSITION.LEFT] = -1.5f,
-        [POSITION.CENTER] = 0f,
-        [POSITION.RIGHT] = 1.5f
-    };
-    private POSITION _horizontal_pos = POSITION.CENTER;
+    private float _speed;
+    private float _animationBlend;
+    private float _targetRotation = 0.0f;
+    private float _rotationVelocity;
     private float _verticalVelocity;
-    private readonly float _terminalVelocity = 53.0f;
-    private bool _moveAside;
-    private bool _asideRight;
+    private float _terminalVelocity = 53.0f;
 
     // timeout deltatime
     private float _jumpTimeoutDelta;
     private float _fallTimeoutDelta;
 
     // animation IDs
+    private int _animIDSpeed;
     private int _animIDGrounded;
     private int _animIDJump;
     private int _animIDFreeFall;
-    private int _animIDMoveAside;
-    private int _animIDAsideRight;
 
 #if ENABLE_INPUT_SYSTEM 
     private PlayerInput _playerInput;
@@ -144,7 +135,7 @@ public class SantaController : MonoBehaviour
     private void Start()
     {
         _cinemachineTargetYaw = CinemachineCameraTarget.transform.rotation.eulerAngles.y;
-            
+
         _hasAnimator = TryGetComponent(out _animator);
         _controller = GetComponent<CharacterController>();
         _input = GetComponent<StarterAssetsInputs>();
@@ -179,11 +170,10 @@ public class SantaController : MonoBehaviour
 
     private void AssignAnimationIDs()
     {
+        _animIDSpeed = Animator.StringToHash("Speed");
         _animIDGrounded = Animator.StringToHash("Grounded");
         _animIDJump = Animator.StringToHash("Jump");
         _animIDFreeFall = Animator.StringToHash("FreeFall");
-        _animIDMoveAside = Animator.StringToHash("MoveAside");
-        _animIDAsideRight = Animator.StringToHash("AsideRight");
     }
 
     private void GroundedCheck()
@@ -224,56 +214,71 @@ public class SantaController : MonoBehaviour
 
     private void Move()
     {
-        // Move aside
-        if(!_moveAside)
+        // set target speed based on move speed, sprint speed and if sprint is pressed
+        float targetSpeed = MoveSpeed;
+
+        // a simplistic acceleration and deceleration designed to be easy to remove, replace, or iterate upon
+
+        // note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
+        // if there is no input, set the target speed to 0
+        if (_input.move == Vector2.zero) targetSpeed = 0.0f;
+
+        // a reference to the players current horizontal velocity
+        float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
+
+        float speedOffset = 0.1f;
+
+        // accelerate or decelerate to target speed
+        if (currentHorizontalSpeed < targetSpeed - speedOffset ||
+            currentHorizontalSpeed > targetSpeed + speedOffset)
         {
-            if (_input.move.x > 0)
-            {
-                if (_horizontal_pos != POSITION.RIGHT)
-                {
-                    _horizontal_pos = NextPos(_horizontal_pos);
-                    _moveAside = true;
-                    _asideRight = true;
-                }
-                else
-                {
-                    // Anim bump wall
-                }
-            }
-            else if (_input.move.x < 0)
-            {
-                if (_horizontal_pos != POSITION.LEFT)
-                {
-                    _horizontal_pos = PrevPos(_horizontal_pos);
-                    _moveAside = true;
-                    _asideRight = false;
-                }
-                else
-                {
-                    // Anim bump wall
-                }
-            }
+            // creates curved result rather than a linear one giving a more organic speed change
+            // note T in Lerp is clamped, so we don't need to clamp our speed
+            _speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed,
+                Time.deltaTime * SpeedChangeRate);
+
+            // round speed to 3 decimal places
+            _speed = Mathf.Round(_speed * 1000f) / 1000f;
+        }
+        else
+        {
+            _speed = targetSpeed;
         }
 
-        float targetX = Position_X[_horizontal_pos];
-        float deltaX = targetX - transform.position.x;
-        float x = 0f; ;
-        if (Mathf.Abs(deltaX) < 0.01f)
+        _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, Time.deltaTime * SpeedChangeRate);
+        if (_animationBlend < 0.01f) _animationBlend = 0f;
+
+        // normalise input direction
+        Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, 0.0f).normalized;
+
+        // note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
+        // if there is a move input rotate player when the player is moving
+        if (_input.move != Vector2.zero)
         {
-            _moveAside = false;
+            _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
+                                _mainCamera.transform.eulerAngles.y;
+        } else
+        {
+            _targetRotation = 0.0f;
         }
-        else x = Mathf.Sign(deltaX) * Time.deltaTime * AsideStepSpeed;
-        // TODO Sometimes get out of the map
+
+        float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity,
+            RotationSmoothTime);
+
+        // rotate to face input direction relative to camera position
+        transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
+
+
+        Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
 
         // move the player
-        _controller.Move(new Vector3(x, _verticalVelocity, 0.0f) * Time.deltaTime);
+        _controller.Move(targetDirection.normalized * (_speed * Time.deltaTime) +
+                                new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
 
         // update animator if using character
         if (_hasAnimator)
         {
-            // Strafe
-            _animator.SetBool(_animIDMoveAside, _moveAside);
-            _animator.SetBool(_animIDAsideRight, _asideRight);
+            _animator.SetFloat(_animIDSpeed, _animationBlend);
         }
     }
 
@@ -351,26 +356,6 @@ public class SantaController : MonoBehaviour
         if (lfAngle < -360f) lfAngle += 360f;
         if (lfAngle > 360f) lfAngle -= 360f;
         return Mathf.Clamp(lfAngle, lfMin, lfMax);
-    }
-
-    private static POSITION PrevPos(POSITION pos)
-    {
-        return pos switch
-        {
-            POSITION.RIGHT => POSITION.CENTER,
-            POSITION.CENTER => POSITION.LEFT,
-            _ => pos,
-        };
-    }
-
-    private static POSITION NextPos(POSITION pos)
-    {
-        return pos switch
-        {
-            POSITION.LEFT => POSITION.CENTER,
-            POSITION.CENTER => POSITION.RIGHT,
-            _ => pos,
-        };
     }
 
     private void OnDrawGizmosSelected()
