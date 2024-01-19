@@ -13,9 +13,9 @@ public class MovingGround : MonoBehaviour
         m_Renderer = GetComponent<MeshRenderer>();
     }
 
-    public void Init(Vector2 offset)
+    public void UpdateSpeed(float ZOffset)
     {
-        _offset = offset;
+        _offset = new Vector2(0, ZOffset);
     }
 
     public void Move(float time)
