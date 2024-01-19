@@ -161,10 +161,11 @@ MonoBehaviour:
   Ground: {fileID: 789922779}
   FogGeneratorLeft: {fileID: 1539870510}
   FogGeneratorRight: {fileID: 1079347129}
-  FogMinSpeed: 5
-  FogMaxSpeed: 10
+  FogInitalSpeed: 10
+  FogInitalParticles: 40
   Prefabs: []
   Gift: {fileID: 5500875376825198563, guid: d0c7d31ccc461e8488feaa498668a5fd, type: 3}
+  _multiplier: 1
 --- !u!4 &38424902
 Transform:
   m_ObjectHideFlags: 0
@@ -1764,6 +1765,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Particle System Right
+      objectReference: {fileID: 0}
+    - target: {fileID: 2729499647727015490, guid: 5d25ced1283734e4e83471fcc730bd6d,
+        type: 3}
+      propertyPath: InitialModule.startSpeed.minMaxState
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4407644704705817617, guid: 5d25ced1283734e4e83471fcc730bd6d,
         type: 3}

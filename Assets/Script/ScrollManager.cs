@@ -14,14 +14,14 @@ public class ScrollManager : MonoBehaviour
     [Header("Fog")]
     public ParticleSystem FogGeneratorLeft;
     public ParticleSystem FogGeneratorRight;
-    public float FogMinSpeed;
-    public float FogMaxSpeed;
+    public float FogInitalSpeed = 10.0f;
+    public int FogInitalParticles = 40;
 
     [Header("Assets")]
     public List<GameObject> Prefabs;
     public GameObject Gift;
 
-    private float _multiplier = 1f;
+    public float _multiplier = 1f;
 
     private Vector3 _offset;
 
@@ -55,7 +55,15 @@ public class ScrollManager : MonoBehaviour
     private void UpdateFogGenerator(ParticleSystem fogGenerator)
     {
         var main = fogGenerator.main;
-        main.startSpeed = FogMinSpeed * _multiplier;
+        main.startSpeed = FogInitalSpeed * _multiplier;
+        var emission = fogGenerator.emission;
+        if(emission.rateOverTime.constant < 150f)
+        {
+            emission.rateOverTime = FogInitalParticles * _multiplier;
+        } else
+        {
+            emission.rateOverTime = 150f;
+        }
     }
 
     private void UpdateGround()
@@ -97,6 +105,9 @@ public class ScrollManager : MonoBehaviour
         if(_multiplier < 4f)
         {
             _multiplier += Time.deltaTime / 60;
+        } else
+        {
+            _multiplier = 4f;
         }
     }
 
