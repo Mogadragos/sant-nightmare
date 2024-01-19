@@ -251,7 +251,7 @@ public class SantaController : MonoBehaviour
 
         // note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
         // if there is a move input rotate player when the player is moving
-        if (_input.move != Vector2.zero)
+        if (!Mathf.Approximately(_input.move.x, 0.0f))
         {
             _targetRotation = Mathf.Sign(_input.move.x) * 90.0f;
             _targetCharacterRotation = Mathf.Sign(_input.move.x) * 30.0f;
