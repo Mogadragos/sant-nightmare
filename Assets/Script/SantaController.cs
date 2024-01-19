@@ -20,7 +20,7 @@ public class SantaController : MonoBehaviour
 
     [Header("Player")]
     [Tooltip("Move speed of the character in m/s")]
-    public float MoveSpeed = 2.0f;
+    public float MoveSpeed = 5.0f;
 
     [Tooltip("How fast the character turns to face movement direction")]
     [Range(0.0f, 0.3f)]
@@ -84,6 +84,7 @@ public class SantaController : MonoBehaviour
     private float _speed;
     private float _animationBlend;
     private float _targetRotation = 0.0f;
+    private float _targetCharacterRotation = 0.0f;
     private float _rotationVelocity;
     private float _verticalVelocity;
     private float _terminalVelocity = 53.0f;
@@ -248,21 +249,18 @@ public class SantaController : MonoBehaviour
         _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, Time.deltaTime * SpeedChangeRate);
         if (_animationBlend < 0.01f) _animationBlend = 0f;
 
-        // normalise input direction
-        Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, 0.0f).normalized;
-
         // note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
         // if there is a move input rotate player when the player is moving
         if (_input.move != Vector2.zero)
         {
-            _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
-                                _mainCamera.transform.eulerAngles.y;
+            _targetRotation = Mathf.Sign(_input.move.x) * 90.0f;
+            _targetCharacterRotation = Mathf.Sign(_input.move.x) * 30.0f;
         } else
         {
-            _targetRotation = 0.0f;
+            _targetRotation = _targetCharacterRotation = 0.0f;
         }
 
-        float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity,
+        float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetCharacterRotation, ref _rotationVelocity,
             RotationSmoothTime);
 
         // rotate to face input direction relative to camera position
